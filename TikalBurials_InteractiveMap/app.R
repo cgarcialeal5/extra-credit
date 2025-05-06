@@ -1,51 +1,103 @@
-#
-# This is a Shiny web application. You can run the application by clicking
-# the 'Run App' button above.
-#
-# Find out more about building applications with Shiny here:
-#
-#    https://shiny.posit.co/
-#
-
+# Prelims: Packages
 library(shiny)
+library(tidyverse)
+library(sf)
+library(terra)
+library(spatstat.geom)
+library(ggplot2)
+library(viridis)
+library(grid)
+library(spatstat.utils)
 
-# Define UI for application that draws a histogram
+# Define UI
 ui <- fluidPage(
-
-    # Application title
-    titlePanel("Old Faithful Geyser Data"),
-
-    # Sidebar with a slider input for number of bins 
-    sidebarLayout(
-        sidebarPanel(
-            sliderInput("bins",
-                        "Number of bins:",
-                        min = 1,
-                        max = 50,
-                        value = 30)
-        ),
-
-        # Show a plot of the generated distribution
-        mainPanel(
-           plotOutput("distPlot")
-        )
+  
+  titlePanel("Burial Density in Tikal: Interactive Map"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("filter_col", "Select Attribute:", choices = c("sex", "age")),
+      selectInput("filter_val", "Select Category:", choices = NULL)
+    ),
+    mainPanel(
+      plotOutput("densityMap"),
+      tableOutput("filteredData")
     )
+  )
 )
 
-# Define server logic required to draw a histogram
-server <- function(input, output) {
-
-    output$distPlot <- renderPlot({
-        # generate bins based on input$bins from ui.R
-        x    <- faithful[, 2]
-        bins <- seq(min(x), max(x), length.out = input$bins + 1)
-
-        # draw the histogram with the specified number of bins
-        hist(x, breaks = bins, col = 'darkgray', border = 'white',
-             xlab = 'Waiting time to next eruption (in mins)',
-             main = 'Histogram of waiting times')
-    })
-}
+# Define server logic 
+server <- function(input, output, session) {
+  
+  
+  # 1. Load Data
+  ## 1.1. Burial Data:
+  b <- read_csv("Data/clean_burial_data.csv", col_names = TRUE) %>%
+    drop_na(x, y) #just in case
+  
+  ## 1.2. Tikal Map:
+  t <- rast("Data/MapTikal.tif")
+  t_extent <- ext(t)
+  t_matrix <- as.raster(t[[1]])
+  t_grob <- rasterGrob(t_matrix, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
+  
+  
+  # 2. Filtering Data
+  ## 2.1 Use filter_col and filter_val as dropdown menus
+  observeEvent(input$filter_col, {
+    updateSelectInput(
+      session,
+      "filter_val",
+      choices = sort(unique(b[[input$filter_col]]))
+    )
+  })
+  
+  ## 2.2. Reactive Object that filters data
+  b_filtered <- reactive({
+    ### 2.2.1 Make sure user selected both
+    req(input$filter_col, input$filter_val)
+    
+    ### 2.2.2 Filter data
+    b %>%
+      filter(get(input$filter_col) == input$filter_val)
+  })
+  
+  
+  # 3. Table output to check filtered data
+  output$filteredData <- renderTable({
+    b_filtered()
+  })
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+}   #END OF SERVER FUNCTION
 
 # Run the application 
 shinyApp(ui = ui, server = server)
