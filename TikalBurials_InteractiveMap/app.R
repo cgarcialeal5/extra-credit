@@ -8,6 +8,11 @@ library(ggplot2)
 library(viridis)
 library(grid)
 library(spatstat.utils)
+library(raster)
+
+# Load functions saved in R files
+r_files <- list.files("TikalBurials_InteractiveMap/R", pattern = "\\.R$", full.names = TRUE)
+sapply(r_files, source)
 
 # Define UI
 ui <- fluidPage(
@@ -32,14 +37,14 @@ server <- function(input, output, session) {
   
   # 1. Load Data
   ## 1.1. Burial Data:
-  b <- read_csv("Data/clean_burial_data.csv", col_names = TRUE) %>%
+  b <- read_csv("TikalBurials_InteractiveMap/Data/clean_burial_data.csv", col_names = TRUE) %>%
     drop_na(x, y) #just in case
   
   ## 1.2. Tikal Map:
-  t <- rast("Data/MapTikal.tif")
+  t <- rast("TikalBurials_InteractiveMap/Data/MapTikal.tif")
   t_extent <- ext(t)
   t_matrix <- as.raster(t[[1]])
-  t_grob <- rasterGrob(t_matrix, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
+  t_grob <- rasterGrob()
   
   
   # 2. Filtering Data
@@ -62,8 +67,40 @@ server <- function(input, output, session) {
       filter(get(input$filter_col) == input$filter_val)
   })
   
+  # 3. Convert to sf object
+  b_filtered_sf <- st_as_sf(
+    b_filtered,
+    coords = c("x", "y"),
+    crs = 32616
+  )
   
-  # 3. Table output to check filtered data
+  # 4. Simulate new points (using function from creative vis project)
+  b_simulated <- simulate_cloud(b_filtered_sf)
+  
+  # 5. Generate KDE (using the kde function from creative vis project)
+  b_kde <- kde(
+    b_simulated,
+    ext_template = t,
+    sigma = 300
+  )
+  
+  # 6. Convert to data frame for plotting
+  b_kde_df <- as.data.frame(b_kde)
+  
+  # 7. Filter out low densities
+  b_kde_df$value[b_kde_df$value < 0.001] <- NA
+  
+  # 8. Create plot with Tikal basemap
+  output$densityMap <- renderPlot({
+    ## 8.1 Use Tikal map as a basemap
+    terra::plot(t_matrix, col = grey(0.9), legend = FALSE)
+    
+    ## 8.2 Plot the kde
+    plot.im(b_kde, add = TRUE, col = viridis(100))
+    
+  })
+  
+  # . Table output to check filtered data
   output$filteredData <- renderTable({
     b_filtered()
   })
@@ -85,8 +122,7 @@ server <- function(input, output, session) {
   
   
   
-  
-  
+ 
   
   
   
