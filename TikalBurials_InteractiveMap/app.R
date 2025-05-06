@@ -12,9 +12,12 @@ ui <- fluidPage(
   
   titlePanel("Burial Density in Tikal: Interactive Map"),
   
+  helpText("Use the dropdown menus below to filter burials by attribute and value within that category."),
+  helpText("The map will update to show a density map of the location of burials with the value you chose."),
+  
   sidebarLayout(
     sidebarPanel(
-      selectInput("filter_col", "Select Attribute:", choices = c(
+      selectInput("filter_col", "Select Value:", choices = c(
         "quadrangle", "age", "sex", "time_period", "grave_type", "location", 
         "head_orientation", "associated_material_1"
         )),
@@ -39,8 +42,11 @@ server <- function(input, output, session) {
   
   ## 1.2. Tikal Map:
   t <- rast("Data/MapTikal.tif")
+  
   t_extent <- ext(t)
+  
   t_matrix <- as.raster(t[[1]])
+  
   t_grob <- rasterGrob(
     t_matrix,
     width = unit(1, "npc"),
@@ -52,6 +58,7 @@ server <- function(input, output, session) {
   # 2. Filtering Data
   ## 2.1. Use filter_col and filter_val as dropdown menus
   observeEvent(input$filter_col, {
+    
     updateSelectInput(
       session,
       "filter_val",
@@ -61,12 +68,13 @@ server <- function(input, output, session) {
   
   ## 2.2. Reactive Object that filters data
   b_filtered <- reactive({
-    ### 2.2.1. Make sure user selected both
+    
     req(input$filter_col, input$filter_val)
     
-    ### 2.2.2. Filter data
     b %>%
+      
       filter(get(input$filter_col) == input$filter_val) %>%
+      
       mutate(
         x = as.numeric(x),
         y = as.numeric(y)
@@ -76,13 +84,16 @@ server <- function(input, output, session) {
   
   # 3. Convert filtered data to sf object
   b_sf <- reactive({
+    
     sf_data <- st_as_sf(b_filtered(), coords = c("x", "y"), crs = 32616)
+    
     return(sf_data)
   })
   
   
   # 4. Simulate new points (using function from creative vis project)
   b_simulated <- reactive({
+    
     radius <- 30
     n_points <- floor(10000 / nrow(b_sf()))
     
@@ -116,6 +127,7 @@ server <- function(input, output, session) {
   
   # 5. Generate KDE 
   b_kde <- reactive({
+    
     sim_data <- b_simulated()
     
     windowA <- owin(
@@ -139,19 +151,16 @@ server <- function(input, output, session) {
   })
   
   
-
-    
-  
-  # 7. Create plot with Tikal basemap
+  # 6. Create plot with Tikal basemap
   output$densityMap <- renderPlot({
-    ## 7.1. Use Tikal map as a basemap
+    ## 6.1. Use Tikal map as a basemap
     terra::plot(
       t,
       col = grey.colors(100, start = 0, end = 1),
       legend = FALSE
       )
     
-    ## 7.2. Plot the kde
+    ## 6.2. Plot the kde
     kde_result <- b_kde()
     
     min_density <- max(kde_result$v) * 0.001
